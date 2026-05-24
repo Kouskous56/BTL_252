@@ -1,0 +1,122 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.integrate import dblquad
+import sympy
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+# Professional plotting configuration
+plt.rcParams.update({
+    "text.usetex": False,
+    "font.family": "serif",
+    "axes.labelsize": 12,
+    "axes.titlesize": 14,
+    "legend.fontsize": 10
+})
+
+def main():
+    print("=== Volume Calculation & 3D Rendering===")
+    f_str = (input(r"Enter f(x,y): ")
+    g_str = (input(r"Lower bound g(x): ")
+    h_str = (input(r"Upper bound h(x): ")
+    a_val = (input(r"Lower limit a: ")
+    b_val = (input(r"Upper limit b: ")
+
+    try:
+        # SymPy processing for professional LaTeX display
+        x_sym, y_sym = sympy.symbols('x y')
+        f_sympy = sympy.simplify(f_str.replace('np.', ''))
+        g_sympy = sympy.simplify(g_str.replace('np.', ''))
+        h_sympy = sympy.simplify(h_str.replace('np.', ''))
+
+        f_latex, g_latex, h_latex = sympy.latex(f_sympy), sympy.latex(g_sympy), sympy.latex(h_sympy)
+
+        eval_env = {"np": np, "x": 0, "y": 0}
+        a = float(eval(a_val, eval_env))
+        b = float(eval(b_val, eval_env))
+
+        # Normalization helpers: Ensure array output for grid evaluation
+        def safe_f(x, y):
+            res = eval(f_str, {"np": np, "x": x, "y": y})
+            if np.isscalar(res): return np.full(np.shape(x), res, dtype=float)
+            return np.asarray(res, dtype=float)
+
+        def safe_g(x):
+            res = eval(g_str, {"np": np, "x": x})
+            if np.isscalar(res): return np.full(np.shape(x), res, dtype=float)
+            return np.asarray(res, dtype=float)
+
+        def safe_h(x):
+            res = eval(h_str, {"np": np, "x": x})
+            if np.isscalar(res): return np.full(np.shape(x), res, dtype=float)
+            return np.asarray(res, dtype=float)
+
+        # 1. Numerical Double Integration
+        volume, _ = dblquad(lambda y, x: float(eval(f_str, {"np": np, "x": x, "y": y})),
+                            a, b,
+                            lambda x: float(eval(g_str, {"np": np, "x": x})),
+                            lambda x: float(eval(h_str, {"np": np, "x": x})))
+        print(f"\nComputed Volume V = {volume:.6f}")
+
+        # 2. Grid Generation and Masking
+        N = 200
+        x_vals = np.linspace(a, b, N)
+        y_g, y_h = safe_g(x_vals), safe_h(x_vals)
+
+        y_min, y_max = min(y_g.min(), y_h.min()), max(y_g.max(), y_h.max())
+        padding = (y_max - y_min) * 0.2 or 1.0
+        y_grid = np.linspace(y_min - padding, y_max + padding, N)
+
+        X, Y = np.meshgrid(x_vals, y_grid)
+        Z = safe_f(X, Y)
+        mask = (Y >= safe_g(X)) & (Y <= safe_h(X))
+        Z_masked = np.where(mask, Z, np.nan)
+
+        # 3. Visualization
+        fig = plt.figure(figsize=(12, 9))
+        ax = fig.add_subplot(111, projection='3d')
+        z_base = np.nanmin(Z_masked) - 0.5 if not np.all(np.isnan(Z_masked)) else 0
+
+        # Plot surface f(x,y)
+        surf = ax.plot_surface(X, Y, Z_masked, cmap='plasma', alpha=0.8, antialiased=True)
+
+        # Render Shaded Vertical Walls
+        def plot_wall(bx, by):
+            bz = safe_f(bx, by)
+            for i in range(len(bx)-1):
+                v = [[(bx[i], by[i], z_base), (bx[i+1], by[i+1], z_base),
+                      (bx[i+1], by[i+1], bz[i+1]), (bx[i], by[i], bz[i])]]
+                ax.add_collection3d(Poly3DCollection(v, facecolors='gray', alpha=0.15))
+
+        plot_wall(x_vals, y_g)
+        plot_wall(x_vals, y_h)
+
+        # Side sections at x=a and x=b
+        for xi in [a, b]:
+            yi = np.linspace(float(safe_g(xi)), float(safe_h(xi)), 20)
+            zi = safe_f(np.full_like(yi, xi), yi)
+            for j in range(len(yi)-1):
+                v = [[(xi, yi[j], z_base), (xi, yi[j+1], z_base), (xi, yi[j+1], zi[j+1]), (xi, yi[j], zi[j])]]
+                ax.add_collection3d(Poly3DCollection(v, facecolors='gray', alpha=0.15))
+
+            for yc in [float(safe_g(xi)), float(safe_h(xi))]:
+                ax.plot([xi, xi], [yc, yc], [z_base, float(safe_f(xi, yc))],
+                        color='black', linestyle='--', alpha=0.6)
+
+        # Base boundary plots
+        ax.plot(x_vals, y_g, z_base, color='crimson', label=fr'$g(x) = {g_latex}$', lw=2)
+        ax.plot(x_vals, y_h, z_base, color='dodgerblue', label=fr'$h(x) = {h_latex}$', lw=2)
+
+        ax.set_title(fr'$V \approx {volume:.6f}$ for $f(x,y) = {f_latex}$', pad=20)
+        ax.set_xlabel('X-axis')
+        ax.set_ylabel('Y-axis')
+        ax.view_init(elev=10, azim=190)
+
+        fig.colorbar(surf, ax=ax, shrink=0.5, aspect=10)
+        ax.legend(loc='center left', bbox_to_anchor=(1, 0.2))
+        plt.show()
+
+    except Exception as e:
+        print(f"System Error: {e}")
+
+if __name__ == "__main__":
+    main()
