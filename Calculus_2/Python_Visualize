@@ -15,11 +15,11 @@ plt.rcParams.update({
 
 def main():
     print("=== Volume Calculation & 3D Rendering===")
-    f_str = (input(r"Enter f(x,y): ")
-    g_str = (input(r"Lower bound g(x): ")
-    h_str = (input(r"Upper bound h(x): ")
-    a_val = (input(r"Lower limit a: ")
-    b_val = (input(r"Upper limit b: ")
+    f_str = input(r"Enter f(x,y): ")
+    g_str = input(r"Lower bound g(x): ")
+    h_str = input(r"Upper bound h(x): ")
+    a_val = input(r"Lower limit a: ")
+    b_val = input(r"Upper limit b: ")
 
     try:
         # SymPy processing for professional LaTeX display
