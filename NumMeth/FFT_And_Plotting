@@ -1,0 +1,111 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import sympy
+
+def cooley_tukey_fft(y):
+    """Implementation of Algorithm 8.3: Cooley-Tukey FFT (Power of 2 length)"""
+    n = len(y)
+    if (n & (n - 1)) != 0:
+        raise ValueError(f"Number of nodes (2m={n}) must be a power of 2 (e.g., 4, 8, 16, 32...).")
+    
+    if n <= 1: return y
+
+    def bit_reverse_order(x):
+        n = len(x)
+        j = 0
+        for i in range(1, n):
+            bit = n >> 1
+            while j & bit:
+                j ^= bit
+                bit >>= 1
+            j ^= bit
+            if i < j: x[i], x[j] = x[j], x[i]
+        return x
+
+    c = bit_reverse_order(y.astype(complex).copy())
+    levels = int(np.log2(n))
+    for s in range(1, levels + 1):
+        m_len = 2**s
+        m2 = m_len // 2
+        w_m = np.exp(-2j * np.pi / m_len)
+        for k in range(0, n, m_len):
+            w = 1 + 0j
+            for j in range(m2):
+                u = c[k + j]
+                v = w * c[k + j + m2]
+                c[k + j] = u + v
+                c[k + j + m2] = u - v
+                w *= w_m
+
+    m_val = n // 2
+    a = np.zeros(m_val + 1)
+    b = np.zeros(m_val + 1)
+
+    for k in range(m_val + 1):
+        val = (1/m_val) * c[k] * ((-1)**k)
+        a[k] = val.real
+        b[k] = -val.imag
+    return a, b
+
+def S_m(t, a, b_coeffs, m):
+    """Trigonometric interpolating polynomial"""
+    val = 0.5 * (a[0] + a[m] * np.cos(m * t))
+    for k in range(1, m):
+        val += a[k] * np.cos(k * t) + b_coeffs[k] * np.sin(k * t)
+    return val
+
+# --- Interactive Input Section ---
+print("=== FFT Interpolation Tool ===")
+print("Note: 2*m must be a power of 2 (e.g., m=2, 4, 8, 16...)")
+f_raw = input("Enter f(x) [e.g., x**2 * np.sin(x)]: ") or "x**2 * np.sin(x)"
+f_str = f_raw.replace('np.', '')
+a_bound = eval(input("Enter lower bound a: ") or "-np.pi", {"np": np})
+b_bound = eval(input("Enter upper bound b: ") or "np.pi", {"np": np})
+m_degree = int(input("Enter m (e.g., 2, 4, 8, 16): ") or "4")
+
+# Prepare LaTeX title using SymPy for professional display
+x_sym = sympy.Symbol('x')
+f_latex = sympy.latex(sympy.simplify(f_str))
+
+# 1. Node Generation & Mapping
+n_nodes = 2 * m_degree
+t_nodes = -np.pi + np.arange(n_nodes) * np.pi / m_degree
+x_nodes = a_bound + (t_nodes + np.pi) * (b_bound - a_bound) / (2 * np.pi)
+y_nodes = eval(f_raw, {"np": np, "x": x_nodes})
+
+# 2. Compute Coefficients
+a_coeffs, b_coeffs = cooley_tukey_fft(y_nodes)
+
+# 3. Output Table
+df_coeffs = pd.DataFrame({
+    'k': range(m_degree + 1),
+    'a_k': a_coeffs,
+    'b_k': b_coeffs
+})
+print("\n--- Fourier Coefficients Table ---")
+print(df_coeffs.to_string(index=False))
+
+# 4. Visualization
+t_plot = np.linspace(-np.pi, np.pi, 1000)
+x_plot = a_bound + (t_plot + np.pi) * (b_bound - a_bound) / (2 * np.pi)
+y_true = eval(f_raw, {"np": np, "x": x_plot})
+y_approx = S_m(t_plot, a_coeffs, b_coeffs, m_degree)
+
+plt.figure(figsize=(14, 6))
+# Subplot 1: Comparison
+plt.subplot(1, 2, 1)
+plt.plot(x_plot, y_true, 'g--', label='True $f(x)$')
+plt.plot(x_plot, y_approx, 'r', label=f'$S_{{{m_degree}}}(x)$')
+plt.scatter(x_nodes, y_nodes, color='black', label='Nodes', zorder=5)
+plt.title(fr"FFT Interpolation of $f(x) = {f_latex}$", fontsize=14)
+plt.legend(); plt.grid(True, alpha=0.3)
+
+# Subplot 2: Error Analysis
+plt.subplot(1, 2, 2)
+plt.plot(x_plot, y_true - y_approx, 'b', label=f'Error $f(x) - S_{{{m_degree}}}(x)$')
+plt.scatter(x_nodes, np.zeros_like(x_nodes), color='red', s=40, label='Nodes (Error=0)', zorder=5)
+plt.axhline(0, color='black', linestyle='--', linewidth=1.5, alpha=0.7)
+plt.title("Interpolation Error", fontsize=14)
+plt.legend(); plt.grid(True, alpha=0.3)
+plt.show()
