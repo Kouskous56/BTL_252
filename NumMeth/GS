@@ -1,0 +1,51 @@
+import numpy as np
+
+h = 0.05
+h2 = h * h
+N = int(1 / h)          # N = 20
+
+# Initialize solution matrix and grid
+u = np.zeros((N + 1, N + 1))
+x = np.linspace(0, 1, N + 1)
+y = np.linspace(0, 1, N + 1)
+
+# Boundary conditions (do not overwrite corners)
+# Left and right boundaries (j = 1..N-1)
+for j in range(1, N):
+    u[0, j] = y[j]            # u(0, y) = y
+    u[N, j] = 2.0 ** y[j]     # u(1, y) = 2^y
+
+# Bottom and top boundaries (i = 1..N-1)
+for i in range(1, N):
+    u[i, 0] = x[i]            # u(x, 0) = x
+    u[i, N] = x[i] ** 2 + 1   # u(x, 1) = x^2 + 1
+
+# Four corner values
+u[0, 0] = 0.0                 # u(0,0) = 0
+u[N, 0] = 1.0                 # u(1,0) = 2^0 = 1
+u[0, N] = 1.0                 # u(0,1) = 1
+u[N, N] = 2.0                 # u(1,1) = 2
+
+# Gauss--Seidel iteration
+tol = 1e-8
+max_iter = 10000
+
+for it in range(max_iter):
+    err = 0.0
+    for i in range(1, N):
+        for j in range(1, N):
+            new_val = 0.25 * (u[i+1, j] + u[i-1, j] +
+                              u[i, j+1] + u[i, j-1] -
+                              h2 * (2.0 * x[i] + y[j] ** 2))
+            err = max(err, abs(new_val - u[i, j]))
+            u[i, j] = new_val
+
+    if err < tol:
+        print(f"Converged after {it+1} iterations, error = {err:.2e}")
+        break
+else:
+    print(f"Not converged after {max_iter} iterations, error = {err:.2e}")
+print("\nSolution at selected points:")
+for i in [5, 10, 15]:
+    for j in [5, 10, 15]:
+        print(f"u({x[i]:.2f}, {y[j]:.2f}) = {u[i, j]:.6f}")
